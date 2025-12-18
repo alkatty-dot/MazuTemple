@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線上媽祖靈籤 | 智慧指引版</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 與 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* 引入襯線字體，增加宮廟氛圍 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Serif TC', serif; }
+        
+        /* 3D 翻轉動畫 */
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-x-180 { transform: rotateX(180deg); }
+        .writing-vertical { writing-mode: vertical-rl; }
+        
+        /* 擲筊動畫 */
+        @keyframes toss-left { 
+            0% { transform: translateY(0) rotateX(0) rotateZ(0); } 
+            50% { transform: translateY(-150px) rotateX(720deg) rotateZ(-30deg); } 
+            100% { transform: translateY(0) rotateX(var(--rotate-end-left)) rotateZ(15deg); } 
+        }
+        @keyframes toss-right { 
+            0% { transform: translateY(0) rotateX(0) rotateZ(0); } 
+            50% { transform: translateY(-150px) rotateX(720deg) rotateZ(30deg); } 
+            100% { transform: translateY(0) rotateX(var(--rotate-end-right)) rotateZ(-15deg); } 
+        }
+        .animate-toss-left { animation: toss-left 1.5s ease-out forwards; }
+        .animate-toss-right { animation: toss-right 1.5s ease-out forwards; }
+        
+        /* 搖籤動畫 */
+        @keyframes container-shake { 
+            0%, 100% { transform: rotate(0deg); } 
+            25% { transform: rotate(-5deg) translateY(-5px); } 
+            75% { transform: rotate(5deg) translateY(-5px); } 
+        }
+        .animate-shake-hard { animation: container-shake 0.1s infinite; }
+        
+        /* 淡入動畫 */
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        
+        /* 隱藏 Canvas */
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-stone-900 text-yellow-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- 圖示組件 (SVG) ---
+        const IconBase = ({ d, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d={d} />
+            </svg>
+        );
+        const User = (props) => <IconBase {...props} d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />;
+        const Star = (props) => <IconBase {...props} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />;
+        const RotateCcw = (props) => <IconBase {...props} d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5" />;
+        const Download = (props) => <IconBase {...props} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" />;
+        const X = (props) => <IconBase {...props} d="M18 6L6 18 M6 6l12 12" />;
+        const Sparkles = (props) => <IconBase {...props} d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />;
+        const Flower = (props) => <IconBase {...props} d="M12 7.5a4.5 4.5 0 1 1 4.5 4.5M12 7.5A4.5 4.5 0 1 0 7.5 12M12 7.5V9m-4.5 3a4.5 4.5 0 1 1 4.5-4.5M7.5 12H9m3 4.5a4.5 4.5 0 1 1-4.5-4.5M12 16.5v-1.5m4.5-3a4.5 4.5 0 1 1-4.5 4.5M16.5 12H15" />; // Simplified Flower
+        const Heart = (props) => <IconBase {...props} d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />;
+        const Lock = (props) => <IconBase {...props} d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-5 0V7a4 4 0 1 0-8 0v4" />;
+        const ListOrdered = (props) => <IconBase {...props} d="M10 6h11M10 12h11M10 18h11M4 6h1M4 12h1M4 18h1" />;
+        const Hand = (props) => <IconBase {...props} d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0 M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2 M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />;
+        const Move = (props) => <IconBase {...props} d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3-3M2 12h20M12 2v20" />;
+
+        // --- 資料庫 ---
+        // (完整 60 首邏輯，這裡使用生成邏輯模擬，實際使用時可展開為完整 JSON)
+        const LOTS_DATA = [
+            {id:1,t:'甲子',l:'大吉',s:'包公請雷驚仁宗',p:['日出便見風雲散','光明清淨照世間','一向前途通大道','萬事清吉保平安'],j:{功名:'顯榮',月令:'月圓',婚姻:'成者',財利:'十分',治病:'痊癒',尋人:'得回',官事:'有理',家運:'平安'},m:'撥雲見日'},
+            {id:2,t:'甲寅',l:'中吉',s:'於今此景正當時',p:['於今此景正當時','看看欲吐百花魁','若能遇得春色到','一灑清吉脫塵埃'],j:{功名:'有貴',月令:'平平',婚姻:'和合',財利:'晚成',治病:'春癒',尋人:'南方',官事:'勝訴',家運:'漸興'},m:'春暖花開'},
+            {id:3,t:'乙丑',l:'下下',s:'孟姜女送寒衣',p:['雲開月出正分明','不須進退問前程','婚姻皆由天註定','和合清吉萬事成'],j:{功名:'無望',月令:'淡淡',婚姻:'不吉',財利:'微薄',治病:'拖延',尋人:'難見',官事:'和解',家運:'守成'},m:'順其自然'},
+            {id:4,t:'乙卯',l:'中平',s:'孫悟空大難火災',p:['禾稻看看結成完','此事必定兩相全','回到家中寬心坐','妻兒鼓舞樂團圓'],j:{功名:'少',月令:'中平',婚姻:'合',財利:'平',治病:'安',尋人:'見',官事:'拖',家運:'團圓'},m:'先苦後甘'},
+            {id:5,t:'乙辰',l:'平吉',s:'龐涓害孫臏',p:['億萬金銀與爾牽','須防白心人所連','寬心且守寬心坐','必然遇得貴人連'],j:{功名:'阻',月令:'不遂',婚姻:'平',財利:'守',治病:'運',尋人:'難',官事:'防',家運:'守舊'},m:'提防小人'},
+            // ... (為確保單機版運行流暢，此處保留前5首真實範例，其餘使用下方的生成器產生，邏輯與 V27 相同)
+        ];
+
+        const fillLots = () => {
+            const fullLots = [...LOTS_DATA];
+            const existingIds = new Set(fullLots.map(l => l.id));
+            const stems = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+            const branches = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+            const poemLines = [
+                ['長江風浪漸漸靜', '于今得進可安寧', '比下月下言人少', '只恐前途命有窮'],
+                ['勸君把定心莫虛', '天註衣祿自有餘', '和合重重常吉慶', '時來終遇得明珠'],
+                ['風雲致雨落洋洋', '天災時氣必有傷', '命內此事難和合', '更逢一足出外鄉'],
+                ['命中正逢羅孛關', '用盡心機總未休', '作福問神難得過', '恰是行舟上高灘'],
+                ['禾稻看看結成完', '此事必定兩相全', '回到家中寬心坐', '妻兒鼓舞樂團圓']
+            ];
+
+            for (let i = 1; i <= 60; i++) {
+                if (!existingIds.has(i)) {
+                    const stem = stems[(i-1) % 10];
+                    const branch = branches[(i-1) % 12];
+                    const title = `${stem}${branch}`;
+                    const lucks = ['大吉', '上吉', '中吉', '中平', '下下'];
+                    const luck = lucks[i % 5];
+                    const pIndex = i % poemLines.length;
+                    const j = luck === '大吉' ? {功名:'顯', 月令:'圓', 婚姻:'成', 財利:'有', 治病:'癒', 尋人:'見', 官事:'勝', 家運:'隆'} :
+                              luck === '下下' ? {功名:'無', 月令:'虧', 婚姻:'難', 財利:'失', 治病:'險', 尋人:'杳', 官事:'虧', 家運:'衰'} :
+                              {功名:'平', 月令:'平', 婚姻:'合', 財利:'平', 治病:'安', 尋人:'遲', 官事:'和', 家運:'安'};
+
+                    fullLots.push({
+                        id: i, t: title, l: luck, s: `古人典故${i}`, p: poemLines[pIndex], j: j, m: luck === '大吉' ? '萬事如意' : '守成待時'
+                    });
+                }
+            }
+            return fullLots.sort((a, b) => a.id - b.id);
+        };
+
+        const LOTS_60_FULL = fillLots();
+
+        // --- 核心邏輯 (與 V27 相同) ---
+        const analyzeIntent = (q) => {
+            const safeQ = q || "";
+            let category = "功名";
+            let type = "work";
+
+            if (safeQ.match(/學業|考試|讀書|成績|榜單|轉系|科系|休學|復學|學校|大學|高中|研究所|論文|教授|選修|必修/)) {
+                category = "功名"; type = "study";
+            } else if (safeQ.match(/另一[伴半]|對象|姻緣|愛|桃花|復合|分手|結婚|曖昧|男友|女友|老公|老婆|夫妻|喜歡/)) {
+                category = "婚姻"; type = "love";
+            } else if (safeQ.match(/錢|財|投資|股票|生意|買房|債/)) {
+                category = "財利"; type = "wealth";
+            } else if (safeQ.match(/健康|病|痛|身體|手術|住院|開刀/)) {
+                category = "治病"; type = "health";
+            } else if (safeQ.match(/工作|求職|事業|面試|公司|老闆|薪水|升遷|履歷|offer|轉職|離職/)) {
+                category = "功名"; type = "work";
+            } else if (safeQ.match(/尋人|找|失物|不見/)) { category = "尋人"; type = "missing"; 
+            } else if (safeQ.match(/官司|法律|訴訟|告/)) { category = "官事"; type = "legal"; 
+            } else if (safeQ.match(/家|搬家|運勢|平安/)) { category = "家運"; type = "family"; }
+
+            const nouns = safeQ.match(/(電子書企劃|工程師|業務|對象|另一[伴半]|男朋友|女朋友|老公|老婆|房子|手術|考試|轉系|科系|論文)/);
+            let defaultSubject = '這件事';
+            if (type === 'study') defaultSubject = '學業前程';
+            else if (type === 'work') defaultSubject = '工作發展';
+            else if (type === 'love') defaultSubject = '感情緣分';
+            else if (type === 'health') defaultSubject = '身體健康';
+
+            const subject = nouns ? nouns[0] : defaultSubject;
+            return { category, type, subject };
+        };
+
+        const generateDeepPersonalizedGuidance = (userName, question, lot) => {
+            // 防呆檢查
+            if (!lot || !lot.p || !lot.j) return "神諭解析中，請稍候...";
+
+            const { category, type, subject } = analyzeIntent(question);
+            const judgement = lot.j[category] || "平平";
+            
+            const opening = `信眾 ${userName} 您好，媽祖婆已經聽見了您的心聲。`;
+            let section1 = `\n【您的祈求】\n「${question}」\n`;
+            let section2 = `\n【媽祖指引方向】\n針對此問題，媽祖婆指示應從「${category}」的角度來解析。\n本籤在「${category}」方面的聖意顯示為：「${judgement}」。\n`;
+
+            let analysis = `\n【籤詩逐句詳解】\n`;
+            
+            // 安全讀取詩句
+            const p0 = lot.p[0] || "";
+            const p1 = lot.p[1] || "";
+            const p2 = lot.p[2] || "";
+            const p3 = lot.p[3] || "";
+
+            if (type === 'health') {
+                analysis += `1. 「${p0}」\n`;
+                if (judgement.match(/癒|安|吉/)) analysis += `這句籤詩是好預兆！象徵身體的陰霾即將散去，病情會逐漸穩定。\n\n`;
+                else analysis += `這句詩暗示目前狀況較為反覆，病根未除，可能需要較長時間的調養。\n\n`;
+            } else if (type === 'work') {
+                analysis += `1. 「${p0}」\n`;
+                if (judgement.match(/顯|有|成|通/)) analysis += `職場上的烏雲即將散去！這代表過去的阻礙將會遠離，您的才華即將被看見。\n\n`;
+                else analysis += `這句詩提醒您，目前大環境或公司內部局勢不明朗，現在不是強出頭的時候。\n\n`;
+            } else {
+                analysis += `1. 「${p0}」\n`;
+                if (lot.l.includes('吉')) analysis += `這句籤詩象徵運勢好轉，您所求之事將會有好的開始。\n\n`;
+                else analysis += `這句籤詩反映了目前處境較為艱難，需要多一點耐心等待轉機。\n\n`;
+            }
+
+            analysis += `2. 「${p1}」\n這句詩是在告訴您，過程中的心態非常重要。保持光明磊落，自然能避開災禍。\n\n`;
+            analysis += `3. 「${p2}」\n${lot.l.includes('吉') ? '這是一個轉折點！媽祖婆鼓勵您方向是正確的，繼續前行吧。' : '這裡媽祖婆給了您一個提醒，前方的路可能還有阻礙，建議先停看聽。'}\n\n`;
+            analysis += `4. 「${p3}」\n最終結果，只要心存善念，媽祖婆會保佑您平安順遂，萬事清吉。\n`;
+
+            let summary = `\n【總結】\n關於${subject}，`;
+            if (type === 'health') summary += judgement.match(/癒|安/) ? `媽祖指示：寬心養病，不必過度擔憂。` : `媽祖指示：切勿拖延，積極治療。`;
+            else if (type === 'work') summary += judgement.match(/顯|有/) ? `媽祖指示：時運亨通，把握良機。` : `媽祖指示：時機未到，沈潛勿躁。`;
+            else summary += `媽祖建議您：${lot.l.includes('吉') ? '把握良機，勇往直前。' : '靜待時機，勿操之過急。'}\n`;
+            
+            return opening + section1 + section2 + analysis + summary;
+        };
+
+        // --- 主元件 ---
+        const BEI_TYPES = { SHENG: '聖筊', XIAO: '笑筊', YIN: '陰筊' };
+        const STEPS = { INTRO: 0, INPUT: 1, ASK_PERMISSION: 2, SHAKING: 3, PICK_LOT: 4, CONFIRM_LOT: 5, AI_ANALYZING: 6, RESULT: 7 };
+
+        // 擲筊元件
+        const MoonBlock = ({ type, rotateClass }) => (
+            <div className={`w-24 h-12 relative transition-transform duration-700 ease-out transform-style-3d ${rotateClass}`}>
+                <div className={`absolute inset-0 backface-hidden ${type === 1 ? 'z-10' : 'z-0'}`} style={{ transform: type === 1 ? 'rotateX(0deg)' : 'rotateX(180deg)' }}>
+                    <svg viewBox="0 0 100 50" className="drop-shadow-lg"><path d="M10,50 Q50,-20 90,50 Z" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2" /><path d="M20,45 Q50,0 80,45" fill="none" stroke="#991b1b" strokeWidth="1" opacity="0.5" /></svg>
+                </div>
+                <div className={`absolute inset-0 backface-hidden ${type === 0 ? 'z-10' : 'z-0'}`} style={{ transform: type === 0 ? 'rotateX(0deg)' : 'rotateX(-180deg)' }}>
+                    <svg viewBox="0 0 100 50" className="drop-shadow-lg"><path d="M10,50 Q50,-20 90,50 Z" fill="#fca5a5" stroke="#b91c1c" strokeWidth="2" /><path d="M15,48 Q50,-10 85,48 Z" fill="#fee2e2" opacity="0.8" /><text x="50" y="40" fontSize="8" textAnchor="middle" fill="#b91c1c" opacity="0.3">天后宮</text></svg>
+                </div>
+            </div>
+        );
+
+        function MazuTempleV27() {
+            const [step, setStep] = useState(STEPS.INTRO);
+            const [userName, setUserName] = useState('');
+            const [question, setQuestion] = useState('');
+            const [isTossing, setIsTossing] = useState(false);
+            const [isResetting, setIsResetting] = useState(false);
+            const [beiResult, setBeiResult] = useState('');
+            const [leftBeiType, setLeftBeiType] = useState(0); 
+            const [rightBeiType, setRightBeiType] = useState(1);
+            const [tossCount, setTossCount] = useState(0); 
+            const [shakeCount, setShakeCount] = useState(0);
+            const [isShakingAnim, setIsShakingAnim] = useState(false); 
+            const [tempLot, setTempLot] = useState(null);
+            const [message, setMessage] = useState('');
+            const [guidanceText, setGuidanceText] = useState('');
+            const [aiText, setAiText] = useState(''); // Added missing state
+            const [generatedImg, setGeneratedImg] = useState(null);
+            const [showImgModal, setShowImgModal] = useState(false);
+            const canvasRef = useRef(null);
+
+            // 擲筊
+            const performToss = (onResult) => {
+                if (isTossing || isResetting) return;
+                setIsTossing(true); setBeiResult(''); setMessage('誠心擲出...'); setTossCount(c => c + 1); 
+                setTimeout(() => {
+                    const rand = Math.random();
+                    let result;
+                    if (step === STEPS.ASK_PERMISSION) result = rand < 0.7 ? BEI_TYPES.SHENG : (rand < 0.85 ? BEI_TYPES.XIAO : BEI_TYPES.YIN);
+                    else result = rand < 0.55 ? BEI_TYPES.SHENG : (rand < 0.75 ? BEI_TYPES.XIAO : BEI_TYPES.YIN);
+                    
+                    setBeiResult(result); setIsTossing(false);
+                    if (result === BEI_TYPES.SHENG) { setLeftBeiType(0); setRightBeiType(1); }
+                    else if (result === BEI_TYPES.XIAO) { setLeftBeiType(0); setRightBeiType(0); }
+                    else { setLeftBeiType(1); setRightBeiType(1); }
+                    if (onResult) onResult(result);
+                }, 1500);
+            };
+
+            const onAskPermission = () => {
+                performToss((result) => {
+                    if (result === BEI_TYPES.SHENG) {
+                        setMessage('聖筊！媽祖答應賜籤，請開始搖籤筒。');
+                        setIsResetting(true); setTimeout(() => { setStep(STEPS.SHAKING); setIsResetting(false); }, 2000);
+                    } else {
+                        setMessage(`擲出${result}。媽祖笑而不語或不允，請誠心再試一次。`);
+                    }
+                });
+            };
+
+            const onShake = () => {
+                if (step !== STEPS.SHAKING || isShakingAnim) return;
+                setIsShakingAnim(true); setShakeCount(c => c + 1); if (navigator.vibrate) navigator.vibrate([30]);
+                setTimeout(() => {
+                    setIsShakingAnim(false);
+                    if (shakeCount >= 5 || (shakeCount > 3 && Math.random() > 0.6)) {
+                        const picked = LOTS_60_FULL[Math.floor(Math.random() * LOTS_60_FULL.length)];
+                        setTempLot(picked); setStep(STEPS.PICK_LOT); setMessage('有一支籤浮出來了！請點擊它抽出。'); setShakeCount(0); 
+                    } else { setMessage(`再用力搖一下...`); }
+                }, 500);
+            };
+
+            const onPickLot = () => { setMessage(`抽出【${tempLot.t}】籤。請擲筊確認是否為此籤。`); setStep(STEPS.CONFIRM_LOT); };
+
+            const onConfirmLot = () => {
+                performToss((result) => {
+                    if (result === BEI_TYPES.SHENG) {
+                        setMessage('聖筊！媽祖確認是這支籤。');
+                        setIsResetting(true); setTimeout(() => { startAiAnalysis(); }, 1500);
+                    } else {
+                        setMessage(`擲出${result}。媽祖說不是這支籤，請重新搖籤。`);
+                        setIsResetting(true); setTimeout(() => { setTempLot(null); setStep(STEPS.SHAKING); setShakeCount(0); setIsResetting(false); }, 2500);
+                    }
+                });
+            };
+
+            const startAiAnalysis = () => {
+                if (!tempLot) { setStep(STEPS.INTRO); setIsResetting(false); return; }
+                
+                // Set loading state and text immediately to avoid empty render
+                setStep(STEPS.AI_ANALYZING); 
+                setIsResetting(false); 
+                setMessage('神諭解析中...');
+                
+                // Simulate progressive loading text
+                const loadingTexts = ["連結籤詩智慧庫...", "分析您的煩惱...", "推演五行卦象...", "生成溫暖指引..."];
+                let i = 0;
+                setAiText(loadingTexts[0]);
+                
+                const interval = setInterval(() => {
+                    i++;
+                    if (i < loadingTexts.length) {
+                        setAiText(loadingTexts[i]);
+                    } else {
+                        clearInterval(interval);
+                        // Generate text inside try-catch to prevent crash
+                        try {
+                            const text = generateDeepPersonalizedGuidance(userName, question, tempLot);
+                            setGuidanceText(text);
+                            setStep(STEPS.RESULT);
+                        } catch (err) {
+                            console.error("Analysis Error:", err);
+                            setMessage("解析發生錯誤，請重試");
+                            setStep(STEPS.SHAKING);
+                        }
+                    }
+                }, 600);
+            };
+
+            const reset = () => {
+                setStep(STEPS.INTRO); setUserName(''); setQuestion(''); setTempLot(null);
+                setMessage(''); setBeiResult(''); setShakeCount(0); setGuidanceText(''); setGeneratedImg(null); setIsResetting(false);
+            };
+
+            // --- Canvas 繪圖 ---
+            const generateImage = () => {
+                const canvas = canvasRef.current;
+                if (!canvas || !tempLot) return;
+                const ctx = canvas.getContext('2d');
+                const width = 1000;
+                
+                const ctxDummy = document.createElement('canvas').getContext('2d');
+                ctxDummy.font = '28px "Noto Serif TC", serif';
+                const padding = 50;
+                const contentWidth = width - (padding * 2);
+                
+                const paragraphs = guidanceText.split('\n');
+                let textHeight = 0;
+                paragraphs.forEach(p => {
+                    let line = '';
+                    for(let w of p.split('')) {
+                        if(ctxDummy.measureText(line + w).width > contentWidth) {
+                            textHeight += 40; line = w;
+                        } else { line += w; }
+                    }
+                    textHeight += 40; textHeight += 20; 
+                });
+
+                const slipHeight = 550;
+                const totalHeight = 180 + slipHeight + 50 + 100 + textHeight + 100; 
+
+                canvas.width = width;
+                canvas.height = totalHeight;
+
+                // 背景
+                ctx.fillStyle = '#fffcf5'; ctx.fillRect(0, 0, width, totalHeight);
+                for(let i=0; i<30000; i++) {
+                    ctx.fillStyle = `rgba(220, 200, 180, ${Math.random() * 0.3})`;
+                    ctx.fillRect(Math.random() * width, Math.random() * totalHeight, 2, 2);
+                }
+
+                ctx.strokeStyle = '#b91c1c'; ctx.lineWidth = 20; ctx.strokeRect(0, 0, width, totalHeight);
+                ctx.strokeStyle = '#d97706'; ctx.lineWidth = 4; ctx.strokeRect(25, 25, width - 50, totalHeight - 50);
+
+                ctx.fillStyle = '#b91c1c'; ctx.textAlign = 'center';
+                ctx.font = 'bold 56px "Noto Serif TC", serif'; ctx.fillText('天后宮靈籤', width / 2, 100);
+
+                const slipTopY = 160;
+                ctx.fillStyle = '#fff0f0'; ctx.fillRect(padding, slipTopY, width - padding*2, slipHeight);
+                ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 4; ctx.strokeRect(padding, slipTopY, width - padding*2, slipHeight);
+
+                ctx.fillStyle = '#991b1b'; ctx.font = 'bold 36px "Noto Serif TC", serif';
+                ctx.fillText(`${tempLot.t}籤 ‧ ${tempLot.l}`, width / 2, slipTopY + 60);
+                ctx.font = '24px "Noto Serif TC", serif'; ctx.fillStyle = '#b91c1c';
+                ctx.fillText(`第${tempLot.id}籤`, width/2, slipTopY + 30);
+
+                ctx.fillStyle = '#4b5563'; ctx.font = '28px "Noto Serif TC", serif';
+                ctx.fillText(`【${tempLot.s}】`, width / 2, slipTopY + 100);
+
+                ctx.fillStyle = '#111827'; ctx.font = 'bold 44px "Noto Serif TC", serif';
+                const poemXStart = width / 2 + 150;
+                const poemYStart = slipTopY + 160;
+                tempLot.p.forEach((line, i) => {
+                    const x = poemXStart - (i * 100);
+                    for(let j=0; j<line.length; j++) {
+                        ctx.fillText(line[j], x, poemYStart + (j * 60));
+                    }
+                });
+
+                ctx.font = '24px "Noto Serif TC", serif'; ctx.textAlign = 'left';
+                const j = tempLot.j;
+                const drawJ = (k, v, x, y) => {
+                    ctx.fillStyle = '#7f1d1d'; ctx.fillText(k, x, y);
+                    ctx.fillStyle = '#dc2626'; ctx.fillText(v, x + 60, y);
+                };
+                let jy = slipTopY + 180;
+                drawJ('功名', j.功名, padding + 20, jy); drawJ('月令', j.月令, padding + 20, jy + 80); 
+                drawJ('婚姻', j.婚姻, padding + 20, jy + 160); drawJ('家運', j.家運, padding + 20, jy + 240);
+
+                jy = slipTopY + 180;
+                drawJ('財利', width - padding - 160, jy); drawJ('治病', width - padding - 160, jy + 80);
+                drawJ('尋人', width - padding - 160, jy + 160); drawJ('官事', width - padding - 160, jy + 240);
+
+                const dividerY = slipTopY + slipHeight + 40;
+                ctx.beginPath(); ctx.moveTo(padding, dividerY); ctx.lineTo(width - padding, dividerY);
+                ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2; ctx.stroke();
+
+                let cursorY = dividerY + 60;
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#b91c1c'; ctx.font = 'bold 32px "Noto Serif TC", serif';
+                ctx.fillText('【媽祖的溫暖指引】', padding, cursorY);
+                cursorY += 50;
+
+                ctx.fillStyle = '#374151'; ctx.font = '28px "Noto Serif TC", serif';
+                paragraphs.forEach(p => {
+                    let line = '';
+                    for(let w of p.split('')) {
+                        if(ctx.measureText(line + w).width > contentWidth) {
+                            ctx.fillText(line, padding, cursorY);
+                            line = w; cursorY += 40;
+                        } else { line += w; }
+                    }
+                    ctx.fillText(line, padding, cursorY);
+                    cursorY += 60; 
+                });
+
+                ctx.textAlign = 'center'; ctx.fillStyle = '#9ca3af'; ctx.font = '20px "Noto Serif TC", serif';
+                ctx.fillText('線上媽祖靈籤 ‧ 誠心結緣', width / 2, totalHeight - 30);
+
+                try {
+                    const url = canvas.toDataURL('image/jpeg', 0.9);
+                    setGeneratedImg(url); setShowImgModal(true);
+                } catch(e) { console.error(e); }
+            };
+
+            // --- Render ---
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen py-6 px-4">
+                    <style>{`
+                        .writing-vertical { writing-mode: vertical-rl; }
+                        :root { --rotate-end-left: ${leftBeiType===1?'0deg':'-180deg'}; --rotate-end-right: ${rightBeiType===1?'0deg':'-180deg'}; }
+                    `}</style>
+                    <canvas ref={canvasRef} className="hidden" />
+
+                    {showImgModal && generatedImg && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowImgModal(false)}>
+                            <div className="bg-white rounded-lg p-4 max-w-sm w-full relative shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setShowImgModal(false)} className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1 shadow-lg z-10"><X size={20}/></button>
+                                <h3 className="text-red-800 font-bold text-center mb-2 flex items-center justify-center gap-2"><Download size={18}/> 結緣圖已生成</h3>
+                                <div className="border-4 border-yellow-500 rounded overflow-hidden mb-3 max-h-[70vh] overflow-y-auto bg-gray-100">
+                                    <img src={generatedImg} alt="籤詩結緣圖" className="w-full h-auto" />
+                                </div>
+                                <p className="text-gray-600 text-sm text-center font-bold bg-yellow-100 p-2 rounded">👆 請長按上方圖片儲存 👆</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-100 pointer-events-none"></div>
+                    
+                    <header className="z-10 text-center mb-6 relative">
+                        <div className="bg-red-800/90 border-2 border-yellow-500/50 px-8 py-3 rounded-full shadow-lg backdrop-blur-sm">
+                            <h1 className="text-2xl md:text-3xl font-bold text-yellow-400 tracking-widest flex items-center gap-3"><Star className="text-yellow-400"/> 天后宮線上靈籤 <Star className="text-yellow-400"/></h1>
+                        </div>
+                    </header>
+
+                    <div className="z-20 min-h-[60px] flex items-center justify-center w-full max-w-md mb-4 px-4">
+                        {message && <div className="bg-black/60 border-l-4 border-yellow-500 text-yellow-100 px-6 py-3 rounded-r-lg shadow-lg animate-fade-in">{message}</div>}
+                    </div>
+
+                    <main className="z-10 w-full max-w-md flex-1 flex flex-col items-center justify-center relative">
+                        {step === STEPS.INTRO && (
+                            <div className="bg-red-900/40 backdrop-blur-md p-8 rounded-2xl border border-yellow-500/30 text-center shadow-2xl space-y-8 animate-fade-in">
+                                <div className="w-24 h-24 bg-yellow-500 rounded-full mx-auto flex items-center justify-center shadow-lg ring-4 ring-yellow-600/50"><User size={48} className="text-red-900"/></div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-yellow-200 mb-2">誠心求籤</h2>
+                                    <div className="bg-black/30 p-6 rounded-lg text-sm text-gray-200 border border-white/10 text-left">
+                                        <p className="flex items-center gap-2 text-yellow-400 mb-4 font-bold text-lg border-b border-yellow-500/50 pb-2"><ListOrdered size={20}/> 虔誠求籤四步驟</p>
+                                        <div className="space-y-3">
+                                            <div className="flex gap-3"><span className="bg-yellow-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</span><p>輸入姓名與祈求事項，誠心默念。</p></div>
+                                            <div className="flex gap-3"><span className="bg-yellow-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</span><p>擲筊請示媽祖是否願意賜籤。</p></div>
+                                            <div className="flex gap-3"><span className="bg-yellow-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</span><p>搖動籤筒直至聖籤浮出。</p></div>
+                                            <div className="flex gap-3"><span className="bg-yellow-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">4</span><p>再次擲筊確認，領取籤詩與解讀。</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => setStep(STEPS.INPUT)} className="w-full py-3 bg-gradient-to-r from-yellow-600 to-yellow-500 text-red-950 font-bold rounded-lg shadow-lg hover:scale-105 transition-transform">開始參拜</button>
+                            </div>
+                        )}
+
+                        {step === STEPS.INPUT && (
+                            <div className="w-full bg-red-900/60 backdrop-blur p-6 rounded-xl border border-yellow-600/30 shadow-2xl space-y-6 animate-fade-in">
+                                <h3 className="text-lg font-bold text-yellow-300 text-center border-b border-yellow-600/30 pb-3">稟報資料</h3>
+                                <div className="space-y-4">
+                                    <div><label className="block text-xs text-yellow-200 mb-1 ml-1">姓名</label><input type="text" value={userName} onChange={e => setUserName(e.target.value)} className="w-full bg-black/30 border border-yellow-700/50 rounded p-3 text-yellow-50 focus:outline-none focus:border-yellow-500 text-white" placeholder="請輸入您的姓名"/></div>
+                                    <div><label className="block text-xs text-yellow-200 mb-1 ml-1">祈求事項 (請詳述)</label><textarea value={question} onChange={e => setQuestion(e.target.value)} className="w-full h-40 bg-black/30 border border-yellow-700/50 rounded p-3 text-yellow-50 focus:outline-none focus:border-yellow-500 resize-none text-white" placeholder="例：想轉系到設計系，不知道是否適合？"/></div>
+                                </div>
+                                <button onClick={() => { if(!userName || !question) { setMessage("請填寫完整以示誠心"); return; } setStep(STEPS.ASK_PERMISSION); setMessage("請默念問題，接著擲筊請示是否賜籤。"); }} className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-red-950 font-bold rounded-lg shadow-lg">資料稟報完畢</button>
+                            </div>
+                        )}
+
+                        {(step === STEPS.ASK_PERMISSION || step === STEPS.CONFIRM_LOT) && (
+                            <div className="flex flex-col items-center justify-center w-full h-full pb-10">
+                                <div className="relative w-full h-64 flex items-center justify-center gap-12 perspective-1000">
+                                    <MoonBlock key={`l-${tossCount}`} type={isTossing?1:leftBeiType} rotateClass={isTossing?'animate-toss-left':''} side="left" />
+                                    <MoonBlock key={`r-${tossCount}`} type={isTossing?1:rightBeiType} rotateClass={isTossing?'animate-toss-right':''} side="right" />
+                                </div>
+                                <div className="h-12 flex items-center justify-center mb-6">{beiResult && !isTossing && <span className="text-3xl font-bold text-yellow-400 animate-bounce">{beiResult}</span>}</div>
+                                <button disabled={isTossing || isResetting} onClick={step===STEPS.ASK_PERMISSION ? onAskPermission : onConfirmLot} className={`px-12 py-4 rounded-full font-bold text-xl shadow-lg border-2 transition-all flex items-center gap-2 ${isTossing || isResetting ? 'bg-gray-600 border-gray-500 text-gray-400 cursor-not-allowed' : 'bg-red-600 border-red-400 text-white hover:bg-red-500'}`}>
+                                    {(isTossing || isResetting) && <Lock size={18}/>}
+                                    {step===STEPS.CONFIRM_LOT?'擲筊確認':'擲筊請示'}
+                                </button>
+                            </div>
+                        )}
+
+                        {(step === STEPS.SHAKING || step === STEPS.PICK_LOT) && (
+                            <div className="flex flex-col items-center justify-end h-full pb-12 w-full" onClick={step===STEPS.SHAKING?onShake:undefined}>
+                                <div className={`relative w-40 h-64 cursor-pointer select-none ${isShakingAnim ? 'animate-shake-hard' : ''}`}>
+                                    <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-32 h-64 flex justify-center items-end overflow-hidden z-0">
+                                        {[...Array(8)].map((_, i) => (
+                                            <div key={i} className="w-3 bg-yellow-200 border border-yellow-700/30 mx-[2px] rounded-t-sm origin-bottom" style={{
+                                                height: '100%', 
+                                                transform: `translateY(${isShakingAnim ? Math.random() * 20 : 0}px) rotate(${(i-4)*4}deg)`,
+                                                transition: 'transform 0.1s'
+                                            }}></div>
+                                        ))}
+                                    </div>
+                                    
+                                    {step === STEPS.PICK_LOT && (
+                                        <div onClick={(e)=>{e.stopPropagation();onPickLot()}} className="absolute -top-32 left-1/2 -translate-x-1/2 w-8 h-64 bg-yellow-100 border-2 border-red-800 rounded-t-md cursor-pointer animate-bounce flex items-center justify-center writing-vertical font-bold text-red-900 z-20 shadow-xl">
+                                            第{tempLot?.id}籤
+                                            <div className="absolute -top-10 animate-pulse text-yellow-300 drop-shadow-md"><Hand size={32} className="rotate-180" /></div>
+                                        </div>
+                                    )}
+
+                                    <div className="absolute bottom-0 w-full h-48 bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 rounded-b-3xl rounded-t-lg border-4 border-amber-950 shadow-2xl flex items-center justify-center z-10">
+                                        <div className="w-24 h-24 border-4 border-amber-900/30 rounded-full flex items-center justify-center opacity-50"><span className="text-4xl font-serif font-bold text-black/40">籤</span></div>
+                                    </div>
+                                </div>
+                                <div className="mt-12 text-center h-20">
+                                    {step === STEPS.SHAKING ? (
+                                        <><p className="text-yellow-200 text-lg font-bold animate-pulse mb-2">請連續點擊籤筒 ({shakeCount})</p><div className="flex justify-center text-gray-500"><Move size={24} className="animate-wiggle" /></div></>
+                                    ) : (<p className="text-yellow-200 text-xl font-bold animate-bounce">請點擊上方浮出的籤支！</p>)}
+                                </div>
+                            </div>
+                        )}
+
+                        {step === STEPS.AI_ANALYZING && (
+                            <div className="flex flex-col items-center justify-center h-full animate-fade-in text-center space-y-6">
+                                <div className="relative">
+                                    <div className="w-24 h-24 rounded-full border-4 border-yellow-500/30 animate-ping absolute inset-0"></div>
+                                    <div className="w-24 h-24 rounded-full bg-yellow-500/20 backdrop-blur flex items-center justify-center animate-pulse-glow">
+                                        <Heart size={48} className="text-yellow-300 fill-yellow-300" />
+                                    </div>
+                                </div>
+                                <h3 className="text-2xl font-bold text-yellow-200">{aiText}</h3>
+                            </div>
+                        )}
+
+                        {step === STEPS.RESULT && tempLot && guidanceText && (
+                            <div className="w-full h-full flex flex-col animate-fade-in pb-8">
+                                <div className="bg-[#fffbf0] text-red-900 rounded-lg p-4 shadow-2xl border-y-8 border-red-800 flex-1 flex flex-col overflow-hidden">
+                                    <div className="border-4 border-red-800 p-2 mb-2 bg-red-50">
+                                        <div className="text-center border-b-2 border-red-200 pb-2 mb-2">
+                                            <div className="flex justify-between items-center px-2">
+                                                <span className="font-bold text-lg">{tempLot.t}籤</span>
+                                                <span className="text-sm bg-red-800 text-white px-2 py-1 rounded">{tempLot.l}</span>
+                                            </div>
+                                            <p className="text-red-800 font-bold mt-1 text-sm">第 {tempLot.id} 籤</p>
+                                            <p className="text-gray-600 font-serif mt-1 text-sm">【{tempLot.s}】</p>
+                                        </div>
+                                        <div className="flex">
+                                            <div className="w-1/6 text-xs text-red-900 flex flex-col gap-2 items-center border-r border-red-200 pt-2">
+                                                <div><span className="block font-bold">功</span><span className="text-red-600">{tempLot.j.功名}</span></div>
+                                                <div><span className="block font-bold">月</span><span className="text-red-600">{tempLot.j.月令}</span></div>
+                                                <div><span className="block font-bold">婚</span><span className="text-red-600">{tempLot.j.婚姻}</span></div>
+                                                <div><span className="block font-bold">家</span><span className="text-red-600">{tempLot.j.家運}</span></div>
+                                            </div>
+                                            <div className="flex-1 flex justify-center items-center py-2">
+                                                <div className="flex flex-row-reverse gap-2">
+                                                    {tempLot.p.map((line, idx) => (<div key={idx} className="writing-vertical text-lg font-serif font-bold text-black h-36 border-l border-red-100 pl-1">{line}</div>))}
+                                                </div>
+                                            </div>
+                                            <div className="w-1/6 text-xs text-red-900 flex flex-col gap-2 items-center border-l border-red-200 pt-2">
+                                                <div><span className="block font-bold">財</span><span className="text-red-600">{tempLot.j.財利}</span></div>
+                                                <div><span className="block font-bold">病</span><span className="text-red-600">{tempLot.j.治病}</span></div>
+                                                <div><span className="block font-bold">尋</span><span className="text-red-600">{tempLot.j.尋人}</span></div>
+                                                <div><span className="block font-bold">官</span><span className="text-red-600">{tempLot.j.官事}</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/60 p-3 rounded border border-red-100 text-sm overflow-y-auto flex-1 whitespace-pre-line leading-relaxed text-justify text-gray-900">
+                                        {guidanceText}
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex gap-4 justify-center">
+                                    <button onClick={generateImage} className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded-full font-bold shadow-lg flex items-center gap-2"><Download size={18}/> 保存結緣圖</button>
+                                    <button onClick={reset} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-yellow-100 rounded-full shadow-lg"><RotateCcw size={18}/></button>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                    <footer className="z-10 mt-4 text-yellow-600/40 text-xs text-center">&copy; 線上媽祖靈籤 | 智慧指引版 V27</footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MazuTempleV27 />);
+    </script>
+</body>
+</html>
