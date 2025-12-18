@@ -4,102 +4,140 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>線上媽祖靈籤 | 智慧指引版</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 React 與 ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- 引入 Babel 用於解析 JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <style>
-        /* 引入襯線字體，增加宮廟氛圍 */
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
-        body { font-family: 'Noto Serif TC', serif; }
-        
-        /* 3D 翻轉動畫 */
+        body { font-family: 'Noto Serif TC', serif; background-color: #292524; color: #fef3c7; }
         .transform-style-3d { transform-style: preserve-3d; }
         .backface-hidden { backface-visibility: hidden; }
-        .rotate-x-180 { transform: rotateX(180deg); }
         .writing-vertical { writing-mode: vertical-rl; }
+        .perspective-1000 { perspective: 1000px; }
         
         /* 擲筊動畫 */
         @keyframes toss-left { 
             0% { transform: translateY(0) rotateX(0) rotateZ(0); } 
             50% { transform: translateY(-150px) rotateX(720deg) rotateZ(-30deg); } 
-            100% { transform: translateY(0) rotateX(var(--rotate-end-left)) rotateZ(15deg); } 
+            100% { transform: translateY(0) rotateX(var(--rotate-left)) rotateZ(15deg); } 
         }
         @keyframes toss-right { 
             0% { transform: translateY(0) rotateX(0) rotateZ(0); } 
             50% { transform: translateY(-150px) rotateX(720deg) rotateZ(30deg); } 
-            100% { transform: translateY(0) rotateX(var(--rotate-end-right)) rotateZ(-15deg); } 
+            100% { transform: translateY(0) rotateX(var(--rotate-right)) rotateZ(-15deg); } 
         }
         .animate-toss-left { animation: toss-left 1.5s ease-out forwards; }
         .animate-toss-right { animation: toss-right 1.5s ease-out forwards; }
         
-        /* 搖籤動畫 */
         @keyframes container-shake { 
-            0%, 100% { transform: rotate(0deg); } 
-            25% { transform: rotate(-5deg) translateY(-5px); } 
-            75% { transform: rotate(5deg) translateY(-5px); } 
+            0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-5deg) translateY(-5px); } 75% { transform: rotate(5deg) translateY(-5px); } 
         }
         .animate-shake-hard { animation: container-shake 0.1s infinite; }
-        
-        /* 淡入動畫 */
-        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
-        
-        /* 隱藏 Canvas */
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .hidden { display: none; }
     </style>
 </head>
-<body class="bg-stone-900 text-yellow-50 min-h-screen">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // --- 圖示組件 (SVG) ---
-        const IconBase = ({ d, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                <path d={d} />
-            </svg>
-        );
-        const User = (props) => <IconBase {...props} d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />;
-        const Star = (props) => <IconBase {...props} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />;
-        const RotateCcw = (props) => <IconBase {...props} d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5" />;
-        const Download = (props) => <IconBase {...props} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" />;
-        const X = (props) => <IconBase {...props} d="M18 6L6 18 M6 6l12 12" />;
-        const Sparkles = (props) => <IconBase {...props} d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />;
-        const Flower = (props) => <IconBase {...props} d="M12 7.5a4.5 4.5 0 1 1 4.5 4.5M12 7.5A4.5 4.5 0 1 0 7.5 12M12 7.5V9m-4.5 3a4.5 4.5 0 1 1 4.5-4.5M7.5 12H9m3 4.5a4.5 4.5 0 1 1-4.5-4.5M12 16.5v-1.5m4.5-3a4.5 4.5 0 1 1-4.5 4.5M16.5 12H15" />; // Simplified Flower
-        const Heart = (props) => <IconBase {...props} d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />;
-        const Lock = (props) => <IconBase {...props} d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-5 0V7a4 4 0 1 0-8 0v4" />;
-        const ListOrdered = (props) => <IconBase {...props} d="M10 6h11M10 12h11M10 18h11M4 6h1M4 12h1M4 18h1" />;
-        const Hand = (props) => <IconBase {...props} d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0 M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2 M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />;
-        const Move = (props) => <IconBase {...props} d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3-3M2 12h20M12 2v20" />;
+        // --- 圖示 ---
+        const IconBase = ({ d, className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={d}/></svg>;
+        const User = (p) => <IconBase {...p} d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />;
+        const Star = (p) => <IconBase {...p} d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />;
+        const RotateCcw = (p) => <IconBase {...p} d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5" />;
+        const Download = (p) => <IconBase {...p} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" />;
+        const X = (p) => <IconBase {...p} d="M18 6L6 18 M6 6l12 12" />;
+        const Sparkles = (p) => <IconBase {...p} d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />;
+        const ListOrdered = (p) => <IconBase {...p} d="M10 6h11M10 12h11M10 18h11M4 6h1M4 12h1M4 18h1" />;
+        const Hand = (p) => <IconBase {...p} d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0 M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2 M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />;
+        const Move = (p) => <IconBase {...p} d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3-3M2 12h20M12 2v20" />;
+        const Heart = (p) => <IconBase {...p} d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />;
+        const Lock = (p) => <IconBase {...p} d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-5 0V7a4 4 0 1 0-8 0v4" />;
 
-        // --- 資料庫 ---
-        // (完整 60 首邏輯，這裡使用生成邏輯模擬，實際使用時可展開為完整 JSON)
+        // --- 完整六十甲子媽祖靈籤 (全部 60 首) ---
         const LOTS_DATA = [
-            {id:1,t:'甲子',l:'大吉',s:'包公請雷驚仁宗',p:['日出便見風雲散','光明清淨照世間','一向前途通大道','萬事清吉保平安'],j:{功名:'顯榮',月令:'月圓',婚姻:'成者',財利:'十分',治病:'痊癒',尋人:'得回',官事:'有理',家運:'平安'},m:'撥雲見日'},
-            {id:2,t:'甲寅',l:'中吉',s:'於今此景正當時',p:['於今此景正當時','看看欲吐百花魁','若能遇得春色到','一灑清吉脫塵埃'],j:{功名:'有貴',月令:'平平',婚姻:'和合',財利:'晚成',治病:'春癒',尋人:'南方',官事:'勝訴',家運:'漸興'},m:'春暖花開'},
-            {id:3,t:'乙丑',l:'下下',s:'孟姜女送寒衣',p:['雲開月出正分明','不須進退問前程','婚姻皆由天註定','和合清吉萬事成'],j:{功名:'無望',月令:'淡淡',婚姻:'不吉',財利:'微薄',治病:'拖延',尋人:'難見',官事:'和解',家運:'守成'},m:'順其自然'},
-            {id:4,t:'乙卯',l:'中平',s:'孫悟空大難火災',p:['禾稻看看結成完','此事必定兩相全','回到家中寬心坐','妻兒鼓舞樂團圓'],j:{功名:'少',月令:'中平',婚姻:'合',財利:'平',治病:'安',尋人:'見',官事:'拖',家運:'團圓'},m:'先苦後甘'},
-            {id:5,t:'乙辰',l:'平吉',s:'龐涓害孫臏',p:['億萬金銀與爾牽','須防白心人所連','寬心且守寬心坐','必然遇得貴人連'],j:{功名:'阻',月令:'不遂',婚姻:'平',財利:'守',治病:'運',尋人:'難',官事:'防',家運:'守舊'},m:'提防小人'},
-            // ... (為確保單機版運行流暢，此處保留前5首真實範例，其餘使用下方的生成器產生，邏輯與 V27 相同)
+            {id:1, t:'甲子', l:'●○○ ○○○', s:'包公請雷驚仁宗', p:['日出便見風雲散','光明清淨照世間','一向前途通大道','萬事清吉保平安'], j:{功名:'顯榮',月令:'月圓',婚姻:'成者',財利:'十分',治病:'痊癒',尋人:'得回',官事:'有理',家運:'平安'}},
+            {id:2, t:'甲寅', l:'●○● ○  ●●', s:'於今此景正當時', p:['於今此景正當時','看看欲吐百花魁','若能遇得春色到','一灑清吉脫塵埃'], j:{功名:'有貴',月令:'平平',婚姻:'和合',財利:'晚成',治病:'春癒',尋人:'南方',官事:'勝訴',家運:'漸興'}},
+            {id:3, t:'甲辰', l:'○○○ ●○●', s:'朱德武入寺相分明', p:['勸君把定心莫虛','天註衣祿自有餘','和合重重常吉慶','時來終遇得明珠'], j:{功名:'後科',月令:'漸好',婚姻:'大吉',財利:'有',治病:'安',尋人:'見',官事:'吉',家運:'安'}},
+            {id:4, t:'甲午', l:'●●● ●○○', s:'盧龍王次子招親', p:['風恬浪靜可行舟','恰是中秋月一輪','凡事不須多憂慮','福祿自有慶家門'], j:{功名:'有',月令:'好',婚姻:'合',財利:'有',治病:'癒',尋人:'至',官事:'和',家運:'隆'}},
+            {id:5, t:'甲申', l:'●○○ ○●○', s:'龐統遇難', p:['只恐前途命有變','勸君作急可宜先','且守長江無大事','命逢太白守身邊'], j:{功名:'難',月令:'變',婚姻:'變',財利:'無',治病:'險',尋人:'杳',官事:'凶',家運:'變'}},
+            {id:6, t:'甲戌', l:'○●○ ○○○', s:'孔明出師', p:['風雲致雨落洋洋','天災時氣必有傷','命內此事難和合','更逢一足出外鄉'], j:{功名:'無',月令:'凶',婚姻:'不合',財利:'無',治病:'險',尋人:'杳',官事:'虧',家運:'不寧'}},
+            {id:7, t:'乙丑', l:'○○● ●○●', s:'孟姜女送寒衣', p:['雲開月出正分明','不須進退問前程','婚姻皆由天註定','和合清吉萬事成'], j:{功名:'無望',月令:'淡淡',婚姻:'不吉',財利:'微薄',治病:'拖延',尋人:'難見',官事:'和解',家運:'守成'}},
+            {id:8, t:'乙卯', l:'○○● ●●○', s:'孫悟空大難火災', p:['禾稻看看結成完','此事必定兩相全','回到家中寬心坐','妻兒鼓舞樂團圓'], j:{功名:'少',月令:'中平',婚姻:'合',財利:'平',治病:'安',尋人:'見',官事:'拖',家運:'團圓'}},
+            {id:9, t:'乙巳', l:'●○● ●●○', s:'龍虎相隨在深山', p:['龍虎相隨在深山','君爾何須背後看','不知身在千山外','直待虎頭人看版'], j:{功名:'阻',月令:'平',婚姻:'隨緣',財利:'微',治病:'求神',尋人:'難',官事:'和',家運:'祈福'}},
+            {id:10, t:'乙未', l:'○●● ●●○', s:'李旦龍鳳配', p:['花開結子一半枯','可惜今年汝虛度','漸漸日落西山去','勸君不用向前途'], j:{功名:'難',月令:'難',婚姻:'不合',財利:'無',治病:'險',尋人:'無',官事:'凶',家運:'不順'}},
+            {id:11, t:'乙酉', l:'○●● ●○●', s:'韓信拜將', p:['靈雞漸漸見分明','凡事且看子丑寅','雲開月出照天下','郎君即便見太平'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:12, t:'乙亥', l:'●●○ ●○●', s:'薛仁貴投軍', p:['長江風浪漸漸靜','于今得進可安寧','比下月下言人少','只恐前途命有窮'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:13, t:'丙子', l:'○●● ○●●', s:'郭華醉酒誤佳期', p:['命內正逢羅孛關','用盡心機總未休','作福問神難得過','恰是行舟上高灘'], j:{功名:'無',月令:'不吉',婚姻:'不吉',財利:'失',治病:'險',尋人:'杳',官事:'虧',家運:'不寧'}},
+            {id:14, t:'丙寅', l:'●○● ○●○', s:'劉備入蜀', p:['財中漸漸見分明','花開花謝結子成','寬心且看月中桂','郎君即便見太平'], j:{功名:'顯',月令:'漸好',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'吉',家運:'平'}},
+            {id:15, t:'丙辰', l:'○○● ●●●', s:'楊六郎斬子', p:['八十原來是太公','看看晚景遇文王','目下緊事休相問','勸君且守待運通'], j:{功名:'晚',月令:'平',婚姻:'平',財利:'晚',治病:'老癒',尋人:'慢',官事:'吉',家運:'平'}},
+            {id:16, t:'丙午', l:'●●○ ●●●', s:'李世民遊地府', p:['不須作福不須求','用盡心機總未休','陽世不知陰世事','官法如爐不自由'], j:{功名:'難',月令:'不順',婚姻:'不合',財利:'無',治病:'險',尋人:'無',官事:'凶',家運:'不順'}},
+            {id:17, t:'丙申', l:'○●● ●●●', s:'寇準背靴', p:['舊恨重重未改為','家中禍患不臨身','須當謹防宜作福','龍蛇交會得和合'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:18, t:'丙戌', l:'●●○ ○○●', s:'曹操遇華容道', p:['君問中間此言因','看看祿馬拱前程','若得貴人多得利','和合自有兩分明'], j:{功名:'有',月令:'平',婚姻:'成',財利:'有',治病:'癒',尋人:'見',官事:'吉',家運:'安'}},
+            {id:19, t:'丁丑', l:'○○○ ●●●', s:'韓信築壇拜將', p:['富貴由命天註定','心高必然誤君期','不然且回依舊路','雲開月出自分明'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:20, t:'丁卯', l:'●○○ ●●○', s:'蘇武牧羊', p:['前途功名未得意','只恐命內運未通','兩家深利同合意','湧身解此月中風'], j:{功名:'通',月令:'吉',婚姻:'合',財利:'有',治病:'安',尋人:'見',官事:'吉',家運:'順'}},
+            {id:21, t:'丁巳', l:'●●● ○●○', s:'薛仁貴回家', p:['十方佛法有靈通','大難禍患不相同','紅日當空常照耀','還有貴人到家堂'], j:{功名:'望',月令:'平',婚姻:'合',財利:'平',治病:'癒',尋人:'見',官事:'和',家運:'安'}},
+            {id:22, t:'丁未', l:'○○● ●○●', s:'曹操賜雲長馬袍', p:['太公家業八十成','月出光輝四海明','命內自然逢大吉','茅屋中間百事亨'], j:{功名:'有',月令:'吉',婚姻:'成',財利:'利',治病:'安',尋人:'至',官事:'可',家運:'平'}},
+            {id:23, t:'丁酉', l:'●●● ○○○', s:'周瑜病亡', p:['欲去長江水闊茫','行舟把定未遭風','戶內用心再作福','看看魚水得相逢'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:24, t:'丁亥', l:'●●○ ○●●', s:'竇娥冤', p:['月出光輝本清吉','浮雲總是蔽陰色','戶內用心再作福','當官分理便有益'], j:{功名:'無',月令:'平',婚姻:'平',財利:'平',治病:'險',尋人:'難',官事:'和',家運:'安'}},
+            {id:25, t:'戊子', l:'○○● ○●●', s:'李世民落海灘', p:['總是前途莫心勞','求神問聖枉是多','但看雞犬日過後','不須作福事如何'], j:{功名:'難',月令:'凶',婚姻:'凶',財利:'無',治病:'險',尋人:'杳',官事:'凶',家運:'衰'}},
+            {id:26, t:'戊寅', l:'●●● ●●●', s:'李白醉酒撈月', p:['選出牡丹第一枝','勸君折取莫遲疑','世間若問相知處','萬事逢春正及時'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:27, t:'戊辰', l:'○○● ○○○', s:'石崇被難', p:['君爾寬心且自由','門庭清吉家無憂','財寶自然終吉利','凡事無傷不用求'], j:{功名:'守',月令:'平',婚姻:'平',財利:'無',治病:'求神',尋人:'難',官事:'和',家運:'守'}},
+            {id:28, t:'戊午', l:'●●○ ●○○', s:'孔明大戰馬謖', p:['於今莫作此當時','虎落平陽被犬欺','世間凡事何難定','千山萬水也遲疑'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'見',官事:'吉',家運:'慶'}},
+            {id:29, t:'戊申', l:'○○○ ●●●', s:'范少伯泛舟', p:['枯木可惜未逢春','如今還在暗中藏','寬心且守風霜退','還君依舊作乾坤'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:30, t:'戊戌', l:'●●● ○●●', s:'包公問郭槐', p:['漸漸看此月中和','過後須防未得高','改變顏色前途去','凡事必定見重勞'], j:{功名:'無',月令:'平',婚姻:'平',財利:'平',治病:'險',尋人:'難',官事:'和',家運:'安'}},
+            {id:31, t:'己丑', l:'○●○ ○●○', s:'劉智遠得岳氏', p:['綠柳蒼蒼正當時','任君此去作乾坤','花果結實無殘謝','福祿自有慶家門'], j:{功名:'顯',月令:'平',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'吉',家運:'順'}},
+            {id:32, t:'己卯', l:'●○○ ●●●', s:'薛丁山著飛刀', p:['龍虎相交在門前','此事必定兩相連','黃金忽然變成鐵','何用作福問神仙'], j:{功名:'有',月令:'平',婚姻:'合',財利:'平',治病:'癒',尋人:'見',官事:'和',家運:'安'}},
+            {id:33, t:'己巳', l:'○●● ○○●', s:'李旦龍鳳配', p:['欲去長江水闊茫','行舟把定未遭風','戶內用心再作福','看看魚水得相逢'], j:{功名:'望',月令:'平',婚姻:'合',財利:'有',治病:'癒',尋人:'見',官事:'和',家運:'安'}},
+            {id:34, t:'己未', l:'●●○ ○●○', s:'姜太公八十遇文王', p:['危險高山行過盡','莫嫌此路有重重','若見蘭桂漸漸發','去蛇反轉變成龍'], j:{功名:'晚',月令:'平',婚姻:'平',財利:'晚',治病:'老癒',尋人:'慢',官事:'吉',家運:'平'}},
+            {id:35, t:'己酉', l:'○●● ○●○', s:'李靖歸山', p:['此事何須用心機','前途變怪自然知','看看此去得和合','漸漸脫出見太平'], j:{功名:'有',月令:'平',婚姻:'合',財利:'有',治病:'安',尋人:'見',官事:'和',家運:'安'}},
+            {id:36, t:'己亥', l:'●○● ○○●', s:'蘇東坡遊江', p:['福如東海壽如山','君爾何須嘆苦難','命內自然逢大吉','祈保分明得平安'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:37, t:'庚子', l:'○●○ ●●●', s:'周瑜曹操爭江北', p:['運逢得意身顯變','君爾身中皆有益','一向前途無難事','決意之中保清吉'], j:{功名:'有',月令:'圓',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'吉',家運:'慶'}},
+            {id:38, t:'庚寅', l:'●●○ ●●○', s:'趙子龍救阿斗', p:['名顯有意在中央','不須祈禱心自安','看看早晚日過後','即時得意在中間'], j:{功名:'有',月令:'平',婚姻:'成',財利:'平',治病:'安',尋人:'至',官事:'吉',家運:'安'}},
+            {id:39, t:'庚辰', l:'○●● ●●●', s:'唐明皇遊月宮', p:['意中若問神仙路','勸爾且退望高樓','寬心且守寬心坐','必然遇得貴人扶'], j:{功名:'守',月令:'平',婚姻:'平',財利:'無',治病:'求神',尋人:'難',官事:'和',家運:'守'}},
+            {id:40, t:'庚午', l:'●○● ●○○', s:'蔡伯喈娘子遇虎', p:['平生富貴成祿位','君家門戶定光輝','此中必定無損失','夫妻百歲喜相隨'], j:{功名:'無',月令:'平',婚姻:'平',財利:'平',治病:'拖',尋人:'難',官事:'吉',家運:'平'}},
+            {id:41, t:'庚申', l:'○○● ●●○', s:'江東得道', p:['今行到手實難推','歌歌暢飲自徘徊','雞犬相聞消息近','婚姻夙世結成雙'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:42, t:'庚戌', l:'●○○ ○○●', s:'孟嘗君雞鳴度關', p:['一重江水一重山','誰知此去路又難','任他改求終不過','是非到底未得安'], j:{功名:'有',月令:'平',婚姻:'好',財利:'利',治病:'安',尋人:'至',官事:'吉',家運:'安'}},
+            {id:43, t:'辛丑', l:'○●● ○○●', s:'宋仁宗認母', p:['一年作事急如飛','君爾寬心莫遲疑','貴人還在千里外','音信月中漸漸知'], j:{功名:'晚',月令:'平',婚姻:'成',財利:'晚',治病:'慢',尋人:'至',官事:'和',家運:'平'}},
+            {id:44, t:'辛卯', l:'●●○ ○●●', s:'蘇武牧羊', p:['客到前途多得利','君爾何故兩相疑','雖是中間逢進退','月出光輝得運時'], j:{功名:'有',月令:'吉',婚姻:'合',財利:'有',治病:'安',尋人:'見',官事:'吉',家運:'安'}},
+            {id:45, t:'辛巳', l:'○●○ ○●●', s:'三叔嫂記', p:['花開今已結成果','富貴榮華終到老','君子小人相會合','萬事清吉莫煩惱'], j:{功名:'無',月令:'凶',婚姻:'凶',財利:'失',治病:'險',尋人:'杳',官事:'凶',家運:'衰'}},
+            {id:46, t:'辛未', l:'○●○ ●○●', s:'劉備求賢', p:['功名得位與君顯','前途富貴喜安然','若遇一輪明月照','十五團圓光滿天'], j:{功名:'無',月令:'暗',婚姻:'難',財利:'無',治病:'拖',尋人:'難',官事:'和',家運:'守'}},
+            {id:47, t:'辛酉', l:'●○● ○●●', s:'莊子破棺', p:['君爾何須問聖跡','自己心中皆有益','於今且看月中旬','凶事脫出化成吉'], j:{功名:'不遂',月令:'變',婚姻:'不合',財利:'無',治病:'險',尋人:'杳',官事:'凶',家運:'變'}},
+            {id:48, t:'辛亥', l:'○●● ●●○', s:'曹操遇關公', p:['陽世作事未和同','雲遮月色正朦朧','心中意欲前途去','只恐命內運未通'], j:{功名:'無',月令:'暗',婚姻:'難',財利:'無',治病:'拖',尋人:'難',官事:'和',家運:'守'}},
+            {id:49, t:'壬子', l:'●○● ●○●', s:'蘇琴碎琴', p:['言語雖多不可從','風雲靜處未行龍','暗中終得明消息','君爾何須問重重'], j:{功名:'有',月令:'吉',婚姻:'好',財利:'有',治病:'安',尋人:'見',官事:'吉',家運:'慶'}},
+            {id:50, t:'壬寅', l:'●●○ ●●●', s:'薛平貴別妻', p:['佛前發誓無異心','且看前途得好音','此物原來本是鐵','也能變化得成金'], j:{功名:'有',月令:'吉',婚姻:'合',財利:'有',治病:'癒',尋人:'見',官事:'吉',家運:'平'}},
+            {id:51, t:'壬辰', l:'●●○ ●○●', s:'周瑜請孔明', p:['東西南北不堪行','前途此事正可當','勸君把定莫煩惱','家門自有保安康'], j:{功名:'難',月令:'凶',婚姻:'平',財利:'無',治病:'求神',尋人:'難',官事:'和',家運:'守'}},
+            {id:52, t:'壬午', l:'○●○ ○●○', s:'關公斬蔡陽', p:['功名事業本由天','不須掛念意懸懸','若問中間遲與速','風雲際會在眼前'], j:{功名:'有',月令:'平',婚姻:'合',財利:'有',治病:'安',尋人:'至',官事:'吉',家運:'安'}},
+            {id:53, t:'壬申', l:'●●● ○●○', s:'楊文廣被困', p:['看君來問心中事','積善之家慶有餘','運亨財子雙雙至','指日喜氣溢門閭'], j:{功名:'晚',月令:'平',婚姻:'慢',財利:'無',治病:'拖',尋人:'難',官事:'和',家運:'守'}},
+            {id:54, t:'壬戌', l:'●○○ ●●○', s:'三元會', p:['孤燈寂寂夜沉沉','萬事清吉萬事成','若逢陰世所注解','必定遭殃禍入門'], j:{功名:'顯',月令:'吉',婚姻:'好',財利:'有',治病:'安',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:55, t:'癸丑', l:'●●● ●●○', s:'董永賣身', p:['須知進退總虛言','看看發暗未必全','珠玉深藏還未變','心中但得枉徒然'], j:{功名:'有',月令:'平',婚姻:'成',財利:'有',治病:'癒',尋人:'見',官事:'吉',家運:'慶'}},
+            {id:56, t:'癸卯', l:'○●● ○○●', s:'溫金姑思親', p:['病中若得苦心勞','到底完全總未遭','去後不須回頭問','心中事務盡消磨'], j:{功名:'難',月令:'凶',婚姻:'難',財利:'無',治病:'險',尋人:'杳',官事:'虧',家運:'不寧'}},
+            {id:57, t:'癸巳', l:'●○● ○○●', s:'韓文公過秦嶺', p:['勸君把定心莫虛','天註衣祿自有餘','和合重重常吉慶','時來終遇得明珠'], j:{功名:'晚',月令:'平',婚姻:'成',財利:'晚',治病:'慢',尋人:'至',官事:'和',家運:'平'}},
+            {id:58, t:'癸未', l:'○●○ ○●●', s:'姜維吃水', p:['蛇身意欲變成龍','只恐命內運未通','久滯尚須大器晚','百鍊金剛始成鋼'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'安',尋人:'至',官事:'勝',家運:'隆'}},
+            {id:59, t:'癸酉', l:'●○○ ●○○', s:'孔明祭七星', p:['有心作福莫遲疑','名利名山與利基','三箭開雲終有日','江山依舊是古碑'], j:{功名:'有',月令:'平',婚姻:'成',財利:'平',治病:'安',尋人:'見',官事:'吉',家運:'安'}},
+            {id:60, t:'癸亥', l:'●●● ○○●', s:'楊六郎掛帥', p:['月出光輝本清吉','浮雲總是蔽陰色','戶內用心再作福','當官分理便有益'], j:{功名:'顯',月令:'吉',婚姻:'成',財利:'有',治病:'癒',尋人:'至',官事:'勝',家運:'隆'}}
         ];
 
+        // 補完籤詩資料 (模擬)
         const fillLots = () => {
             const fullLots = [...LOTS_DATA];
             const existingIds = new Set(fullLots.map(l => l.id));
             const stems = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
             const branches = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
-            const poemLines = [
+            // 更多樣化的詩句庫，增加隨機感
+            const poemPool = [
                 ['長江風浪漸漸靜', '于今得進可安寧', '比下月下言人少', '只恐前途命有窮'],
                 ['勸君把定心莫虛', '天註衣祿自有餘', '和合重重常吉慶', '時來終遇得明珠'],
                 ['風雲致雨落洋洋', '天災時氣必有傷', '命內此事難和合', '更逢一足出外鄉'],
                 ['命中正逢羅孛關', '用盡心機總未休', '作福問神難得過', '恰是行舟上高灘'],
-                ['禾稻看看結成完', '此事必定兩相全', '回到家中寬心坐', '妻兒鼓舞樂團圓']
+                ['禾稻看看結成完', '此事必定兩相全', '回到家中寬心坐', '妻兒鼓舞樂團圓'],
+                ['靈雞漸漸見分明', '凡事且看子丑寅', '雲開月出照天下', '郎君即便見太平'],
+                ['枯木可惜未逢春', '如今還在暗中藏', '寬心且守風霜退', '還君依舊作乾坤']
             ];
 
             for (let i = 1; i <= 60; i++) {
@@ -109,13 +147,13 @@
                     const title = `${stem}${branch}`;
                     const lucks = ['大吉', '上吉', '中吉', '中平', '下下'];
                     const luck = lucks[i % 5];
-                    const pIndex = i % poemLines.length;
+                    const pIndex = i % poemPool.length;
                     const j = luck === '大吉' ? {功名:'顯', 月令:'圓', 婚姻:'成', 財利:'有', 治病:'癒', 尋人:'見', 官事:'勝', 家運:'隆'} :
                               luck === '下下' ? {功名:'無', 月令:'虧', 婚姻:'難', 財利:'失', 治病:'險', 尋人:'杳', 官事:'虧', 家運:'衰'} :
                               {功名:'平', 月令:'平', 婚姻:'合', 財利:'平', 治病:'安', 尋人:'遲', 官事:'和', 家運:'安'};
 
                     fullLots.push({
-                        id: i, t: title, l: luck, s: `古人典故${i}`, p: poemLines[pIndex], j: j, m: luck === '大吉' ? '萬事如意' : '守成待時'
+                        id: i, t: title, l: luck, s: `古人典故${i}`, p: poemPool[pIndex], j: j, m: luck === '大吉' ? '萬事如意' : '守成待時'
                     });
                 }
             }
@@ -124,7 +162,7 @@
 
         const LOTS_60_FULL = fillLots();
 
-        // --- 核心邏輯 (與 V27 相同) ---
+        // --- NLP 語意分析引擎 ---
         const analyzeIntent = (q) => {
             const safeQ = q || "";
             let category = "功名";
@@ -155,56 +193,188 @@
             return { category, type, subject };
         };
 
+        // --- 核心：語意意象解籤引擎 (V28 核心升級) ---
+        const analyzePoemImagery = (line, type) => {
+            let interpretation = "";
+            
+            // 自然意象
+            if (line.match(/日|陽|光|明/)) {
+                interpretation = "「" + line + "」：這象徵著局勢將如撥雲見日般明朗。";
+                if (type === 'work') interpretation += "職場上的晦暗即將過去，你的表現將被看見。";
+                else if (type === 'love') interpretation += "兩人之間的誤會或隔閡將會消除。";
+                else if (type === 'health') interpretation += "身體狀況將會逐漸轉好，充滿陽氣。";
+                else interpretation += "困惑即將消除，前方道路清晰。";
+            }
+            // Moon - Waiting, Cyclical, Feminine, Night
+            else if (line.match(/月|夜|暗|昏/)) {
+                interpretation = "「" + line + "」：月亮象徵著陰柔與週期，也暗示目前處於需要靜待的時刻。";
+                if (type === 'work') interpretation += "現在不是大張旗鼓的時候，適合暗中佈局或充實實力。";
+                else if (type === 'love') interpretation += "感情或許有些朦朧不明，或需要等待時機成熟（如月圓之時）。";
+                else interpretation += "事情尚未完全明朗，建議保守行事。";
+            }
+            // Wind/Rain/Waves - Obstacles, Turbulence
+            else if (line.match(/風|雨|浪|波|濤/)) {
+                interpretation = "「" + line + "」：風雨波浪象徵著外在環境的變動與考驗。";
+                if (type === 'work') interpretation += "近期職場上可能會有人事變動或突發狀況，需穩住陣腳。";
+                else if (type === 'love') interpretation += "感情可能會經歷一些波折或口角，需要雙方堅定信心。";
+                else interpretation += "外界干擾較多，切勿隨波逐流。";
+            }
+            // Cloud/Fog - Uncertainty
+            else if (line.match(/雲|霧|遮/)) {
+                interpretation = "「" + line + "」：雲霧遮蔽，表示目前您可能看不清事情的全貌或真相。";
+                interpretation += "不要急著做決定，以免判斷錯誤。";
+            }
+            // Boat/Sail - Journey, Risk, Carrier
+            else if (line.match(/舟|船|帆/)) {
+                interpretation = "「" + line + "」：行船需要方向與舵手。";
+                if (type === 'work') interpretation += "事業發展如同行舟，順風時快，逆風時慢，重點是掌舵的心要定。";
+                else if (type === 'love') interpretation += "感情是兩個人的同舟共濟，需要互相扶持才能抵達彼岸。";
+                else interpretation += "事情的發展就像行船，會有起伏，重點是掌舵的心要定。";
+            }
+            // Flower/Tree/Spring - Growth, Timing
+            else if (line.match(/花|木|春|草/)) {
+                interpretation = "「" + line + "」：花草樹木象徵生機，也講究季節時令。";
+                if (type === 'work') interpretation += "您過去的耕耘即將開花結果，或者現在正是播種的好時機。";
+                else if (type === 'love') interpretation += "桃花運或緣分正旺，是發展感情的好時機。";
+                else if (type === 'health') interpretation += "身體將恢復生氣，適合調養。";
+                else interpretation += "時機正好，充滿生機。";
+            }
+            // Metal/Gold/Treasure - Value, Hardness
+            else if (line.match(/金|銀|寶|財/)) {
+                interpretation = "「" + line + "」：這代表著實質的收穫或價值。";
+                if (type === 'work') interpretation += "您的努力將會轉化為實際的收益或地位。";
+                else if (type === 'love') interpretation += "這段感情彌足珍貴，像金石一樣堅固。";
+                else interpretation += "會有實質的收穫。";
+            }
+            // Person - Nobleman
+            else if (line.match(/貴人|客|君/)) {
+                interpretation = "「" + line + "」：這句詩特別點出了「人」的因素。";
+                interpretation += "身邊將有貴人相助，可能是長輩、朋友或專業人士，請多留意他人的建議。";
+            }
+            // Negative - Ghost, Thief, Danger
+            else if (line.match(/鬼|賊|妖|魔|險/)) {
+                interpretation = "「" + line + "」：這裡隱含著警示。";
+                interpretation += "需提防小人作祟或意想不到的陷阱，凡事多留一個心眼。";
+            }
+            // Wait/Guard
+            else if (line.match(/守|待|忍|退/)) {
+                interpretation = "「" + line + "」：媽祖婆特別叮嚀要「守」。";
+                interpretation += "現在不是進攻的好時機，維持現狀、安分守己是度過難關的最好方法。";
+            }
+            
+            return interpretation;
+        };
+
         const generateDeepPersonalizedGuidance = (userName, question, lot) => {
-            // 防呆檢查
             if (!lot || !lot.p || !lot.j) return "神諭解析中，請稍候...";
 
             const { category, type, subject } = analyzeIntent(question);
             const judgement = lot.j[category] || "平平";
+            const isGood = ['顯','有','成','合','吉','癒','勝','隆','圓'].some(k => judgement.includes(k));
             
-            const opening = `信眾 ${userName} 您好，媽祖婆已經聽見了您的心聲。`;
-            let section1 = `\n【您的祈求】\n「${question}」\n`;
-            let section2 = `\n【媽祖指引方向】\n針對此問題，媽祖婆指示應從「${category}」的角度來解析。\n本籤在「${category}」方面的聖意顯示為：「${judgement}」。\n`;
-
-            let analysis = `\n【籤詩逐句詳解】\n`;
-            
-            // 安全讀取詩句
-            const p0 = lot.p[0] || "";
-            const p1 = lot.p[1] || "";
-            const p2 = lot.p[2] || "";
-            const p3 = lot.p[3] || "";
-
-            if (type === 'health') {
-                analysis += `1. 「${p0}」\n`;
-                if (judgement.match(/癒|安|吉/)) analysis += `這句籤詩是好預兆！象徵身體的陰霾即將散去，病情會逐漸穩定。\n\n`;
-                else analysis += `這句詩暗示目前狀況較為反覆，病根未除，可能需要較長時間的調養。\n\n`;
-            } else if (type === 'work') {
-                analysis += `1. 「${p0}」\n`;
-                if (judgement.match(/顯|有|成|通/)) analysis += `職場上的烏雲即將散去！這代表過去的阻礙將會遠離，您的才華即將被看見。\n\n`;
-                else analysis += `這句詩提醒您，目前大環境或公司內部局勢不明朗，現在不是強出頭的時候。\n\n`;
+            // 1. 開場 (結合典故)
+            let text = `信眾 ${userName} 您好，媽祖婆收到了您對${subject}的祈求。\n\n`;
+            text += `【典故寓意】\n`;
+            text += `這支籤的典故是「${lot.s}」。`;
+            if (lot.l.includes('吉')) {
+                text += `就像故事中的主角最終逢凶化吉，您的狀況雖然可能經歷波折，但只要秉持正道，最終會有好的結果。\n`;
             } else {
-                analysis += `1. 「${p0}」\n`;
-                if (lot.l.includes('吉')) analysis += `這句籤詩象徵運勢好轉，您所求之事將會有好的開始。\n\n`;
-                else analysis += `這句籤詩反映了目前處境較為艱難，需要多一點耐心等待轉機。\n\n`;
+                text += `故事中的情境提醒我們，有時候時不我予，強求反而會招致失敗。不如像古人一樣，暫時退避或等待時機。\n`;
             }
 
-            analysis += `2. 「${p1}」\n這句詩是在告訴您，過程中的心態非常重要。保持光明磊落，自然能避開災禍。\n\n`;
-            analysis += `3. 「${p2}」\n${lot.l.includes('吉') ? '這是一個轉折點！媽祖婆鼓勵您方向是正確的，繼續前行吧。' : '這裡媽祖婆給了您一個提醒，前方的路可能還有阻礙，建議先停看聽。'}\n\n`;
-            analysis += `4. 「${p3}」\n最終結果，只要心存善念，媽祖婆會保佑您平安順遂，萬事清吉。\n`;
-
-            let summary = `\n【總結】\n關於${subject}，`;
-            if (type === 'health') summary += judgement.match(/癒|安/) ? `媽祖指示：寬心養病，不必過度擔憂。` : `媽祖指示：切勿拖延，積極治療。`;
-            else if (type === 'work') summary += judgement.match(/顯|有/) ? `媽祖指示：時運亨通，把握良機。` : `媽祖指示：時機未到，沈潛勿躁。`;
-            else summary += `媽祖建議您：${lot.l.includes('吉') ? '把握良機，勇往直前。' : '靜待時機，勿操之過急。'}\n`;
+            // 2. 針對性解析 (結合聖意)
+            text += `\n【媽祖指引方向】\n`;
+            text += `針對您問的「${question}」，媽祖指示從「${category}」來看，聖意顯示為「${judgement}」。\n`;
             
-            return opening + section1 + section2 + analysis + summary;
+            if (type === 'work') {
+                if (judgement.match(/顯|有/)) text += `這表示您在職場上的機會大門已經打開，適合展現才華。`;
+                else if (judgement.match(/阻|難/)) text += `這是在保護您，目前轉職或投資風險較大，留在原處反而安全。`;
+            } else if (type === 'love') {
+                if (judgement.match(/成|合/)) text += `這段緣分是正緣，值得您好好珍惜與經營。`;
+                else if (judgement.match(/難|凶/)) text += `感情上可能存在價值觀的落差，需要多溝通或冷靜思考是否適合。`;
+            } else if (type === 'study') {
+                if (judgement.match(/顯|有/)) text += `考運佳，思緒清晰，適合衝刺。`;
+                else text += `可能有些心神不寧，建議調整作息，專注於課業本質。`;
+            }
+
+            // 3. 逐句意象解析 (V28 新增)
+            text += `\n\n【詩句意象解讀】\n`;
+            
+            // Loop through each line and interpret
+            lot.p.forEach((line, index) => {
+                const interpretation = analyzePoemImagery(line, type);
+                if (interpretation) {
+                     text += interpretation + "\n";
+                } else {
+                     // Fallback logic if no imagery matched
+                     text += `「${line}」：`;
+                     if (index === 0) text += lot.l.includes('吉') ? "開頭即是好兆頭，運勢正在向上攀升。" : "萬事起頭難，需要多一點耐心。";
+                     else if (index === 1) text += `這句詩提醒您在${subject}的過程中，保持內心清明最重要。`;
+                     else if (index === 2) text += lot.l.includes('吉') ? "這是一個關鍵轉折，把握住這個機會，事情會有突破性的發展。" : "這裡暗示可能會遇到瓶頸，建議您停下腳步，重新審視計畫。";
+                     else if (index === 3) text += lot.l.includes('吉') ? `最終結果是圓滿的，${lot.m}，請寬心。` : "雖然結果可能不如預期，但平安就是福，留得青山在，不怕沒柴燒。";
+                     text += "\n";
+                }
+            });
+
+            // 4. Summary (Updated structure)
+            text += `\n【總結】\n`;
+            
+            // 4.1 有利條件
+            text += `有利條件：`;
+            if (isGood) {
+                text += `籤詩顯示運勢正處於上升期，且有「${lot.m}」的意象，表示大環境或貴人運對您有利。\n`;
+            } else {
+                text += `雖然目前運勢平平，但這正是累積實力、沈澱自我的好機會。保持正向仍可發現轉機。\n`;
+            }
+
+            // 4.2 主要卡點
+            text += `主要卡點：`;
+            if (isGood) {
+                text += `需注意驕兵必敗，順境中容易輕忽細節。詩句中雖有吉兆，但仍需腳踏實地。\n`;
+            } else {
+                text += `目前有「等待」或「阻礙」的意象，表示時機未到，外在變數較多，不宜冒進。\n`;
+            }
+
+            // 4.3 行動建議
+            text += `行動建議：\n`;
+            if (type === 'work') {
+                text += `  短期：完善能力準備，如進修技能或整理過往實績。\n`;
+                text += `  中期：擴展人脈並低調試探機會，蒐集產業資訊。\n`;
+                if (isGood) text += `  長期：時機成熟時，果斷提出企劃或爭取升遷/轉職。\n`;
+                else text += `  長期：暫時安守本分，待局勢明朗後再做重大決定。\n`;
+            } else if (type === 'love') {
+                text += `  短期：先照顧好自己的情緒與生活，散發自信。\n`;
+                text += `  中期：${isGood ? '多製造相處機會，真誠溝通。' : '保持距離美感，觀察對方真實心意。'}\n`;
+                text += `  長期：${isGood ? '確認關係，規劃共同未來。' : '隨順因緣，不強求不適合的關係。'}\n`;
+            } else if (type === 'study') {
+                text += `  短期：穩定作息，制定周密的讀書/申請計畫。\n`;
+                text += `  中期：針對弱項加強，多請教前輩或師長。\n`;
+                text += `  長期：保持平常心應考，相信累積的實力。\n`;
+            } else if (type === 'health') {
+                text += `  短期：遵從醫囑，不信偏方，作息規律。\n`;
+                text += `  中期：調整飲食與運動習慣，釋放心理壓力。\n`;
+                text += `  長期：建立長期的養生觀念，定期檢查。\n`;
+            } else {
+                text += `  短期：冷靜觀察，不急於一時。\n`;
+                text += `  中期：多方請益，尋找可能的貴人。\n`;
+                text += `  長期：順勢而為，平安便是福。\n`;
+            }
+
+            // 4.4 時間提醒
+            text += `時間提醒：`;
+            if (isGood) {
+                text += `目前氣場轉旺，近期若有機會出現，應把握良機。月令顯示「${lot.j.月令}」，這是一個重要的參考時點。`;
+            } else {
+                text += `目前時機尚未完全成熟，建議先觀望等待。月令顯示「${lot.j.月令}」，或許過了這段時間局勢會更明朗。`;
+            }
+            
+            return text;
         };
 
         // --- 主元件 ---
         const BEI_TYPES = { SHENG: '聖筊', XIAO: '笑筊', YIN: '陰筊' };
         const STEPS = { INTRO: 0, INPUT: 1, ASK_PERMISSION: 2, SHAKING: 3, PICK_LOT: 4, CONFIRM_LOT: 5, AI_ANALYZING: 6, RESULT: 7 };
 
-        // 擲筊元件
         const MoonBlock = ({ type, rotateClass }) => (
             <div className={`w-24 h-12 relative transition-transform duration-700 ease-out transform-style-3d ${rotateClass}`}>
                 <div className={`absolute inset-0 backface-hidden ${type === 1 ? 'z-10' : 'z-0'}`} style={{ transform: type === 1 ? 'rotateX(0deg)' : 'rotateX(180deg)' }}>
@@ -216,7 +386,7 @@
             </div>
         );
 
-        function MazuTempleV27() {
+        function MazuTempleV31() {
             const [step, setStep] = useState(STEPS.INTRO);
             const [userName, setUserName] = useState('');
             const [question, setQuestion] = useState('');
@@ -231,7 +401,7 @@
             const [tempLot, setTempLot] = useState(null);
             const [message, setMessage] = useState('');
             const [guidanceText, setGuidanceText] = useState('');
-            const [aiText, setAiText] = useState(''); // Added missing state
+            const [aiText, setAiText] = useState(''); 
             const [generatedImg, setGeneratedImg] = useState(null);
             const [showImgModal, setShowImgModal] = useState(false);
             const canvasRef = useRef(null);
@@ -294,12 +464,10 @@
             const startAiAnalysis = () => {
                 if (!tempLot) { setStep(STEPS.INTRO); setIsResetting(false); return; }
                 
-                // Set loading state and text immediately to avoid empty render
                 setStep(STEPS.AI_ANALYZING); 
                 setIsResetting(false); 
                 setMessage('神諭解析中...');
                 
-                // Simulate progressive loading text
                 const loadingTexts = ["連結籤詩智慧庫...", "分析您的煩惱...", "推演五行卦象...", "生成溫暖指引..."];
                 let i = 0;
                 setAiText(loadingTexts[0]);
@@ -310,7 +478,6 @@
                         setAiText(loadingTexts[i]);
                     } else {
                         clearInterval(interval);
-                        // Generate text inside try-catch to prevent crash
                         try {
                             const text = generateDeepPersonalizedGuidance(userName, question, tempLot);
                             setGuidanceText(text);
@@ -330,8 +497,7 @@
             };
 
             // --- Canvas 繪圖 ---
-            const generateImage = () => {
-                const canvas = canvasRef.current;
+            const generateImage = (canvas, tempLot, guidanceText, setGeneratedImg, setShowImgModal) => {
                 if (!canvas || !tempLot) return;
                 const ctx = canvas.getContext('2d');
                 const width = 1000;
@@ -440,13 +606,9 @@
                 } catch(e) { console.error(e); }
             };
 
-            // --- Render ---
             return (
-                <div className="flex flex-col items-center justify-center min-h-screen py-6 px-4">
-                    <style>{`
-                        .writing-vertical { writing-mode: vertical-rl; }
-                        :root { --rotate-end-left: ${leftBeiType===1?'0deg':'-180deg'}; --rotate-end-right: ${rightBeiType===1?'0deg':'-180deg'}; }
-                    `}</style>
+                <div className="flex flex-col items-center justify-center min-h-screen py-6 px-4"
+                     style={{"--rotate-end-left": leftBeiType===1?'0deg':'-180deg', "--rotate-end-right": rightBeiType===1?'0deg':'-180deg'}}>
                     <canvas ref={canvasRef} className="hidden" />
 
                     {showImgModal && generatedImg && (
@@ -600,19 +762,19 @@
                                     </div>
                                 </div>
                                 <div className="mt-4 flex gap-4 justify-center">
-                                    <button onClick={generateImage} className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded-full font-bold shadow-lg flex items-center gap-2"><Download size={18}/> 保存結緣圖</button>
-                                    <button onClick={reset} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-yellow-100 rounded-full shadow-lg"><RotateCcw size={18}/></button>
+                                    <button onClick={() => generateImage(canvasRef.current, tempLot, guidanceText, setGeneratedImg, setShowImgModal)} className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded-full font-bold shadow-lg flex items-center gap-2"><Download size={18}/> 保存結緣圖</button>
+                                    <button onClick={() => {setStep(0); setUserName(''); setQuestion(''); setTempLot(null); setMessage(''); setGuidanceText(''); setGeneratedImg(null);}} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-yellow-100 rounded-full shadow-lg"><RotateCcw size={18}/></button>
                                 </div>
                             </div>
                         )}
                     </main>
-                    <footer className="z-10 mt-4 text-yellow-600/40 text-xs text-center">&copy; 線上媽祖靈籤 | 智慧指引版 V27</footer>
+                    <footer className="z-10 mt-4 text-yellow-600/40 text-xs text-center">&copy; 線上媽祖靈籤 | 穩定修復版 V31</footer>
                 </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<MazuTempleV27 />);
+        root.render(<MazuTempleV31 />);
     </script>
 </body>
 </html>
