@@ -422,7 +422,7 @@
             const onAskPermission = () => {
                 performToss((result) => {
                     if (result === '聖筊') {
-                        setMessage(`${deity === 'mazu' ? '媽祖' : '大仙'}答應賜籤，請開始搖籤筒。`);
+                        setMessage(`${deity === 'mazu' ? '媽祖' : '大仙'}答應賜籤，請點擊按鈕開始搖籤筒。`);
                         setIsResetting(true); setTimeout(() => { setStep(3); setIsResetting(false); }, 2000);
                     } else {
                         setMessage(`擲出${result}。神明笑而不語或不允，請誠心再試。`);
@@ -798,3 +798,4 @@
     </script>
 </body>
 </html>
+
